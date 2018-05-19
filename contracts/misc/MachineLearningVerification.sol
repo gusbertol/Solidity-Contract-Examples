@@ -9,6 +9,9 @@
     model works.
     
     Note: this is just a fun thought experiment. 
+    
+    Example: classify the data appropriately, have a large dataset with the correct answers stored privately and hashed.
+    Model that successfully classifies the data will produce the correct hash and be able to take the prize. 
 */
 
 pragma solidity ^0.4.17;
@@ -84,7 +87,9 @@ contract MachineLearningVerification
     {
         require(msg.sender == author);
         require(winner != address(0));
-        winner.transfer(this.balance);
+        require(claimed);
+        //winner gets all the ether in the contract and the contract ends
+        selfdestruct(winner);
     }
     
     function addContribution() payable public 
@@ -109,9 +114,9 @@ contract MachineLearningVerification
         burnAddress.transfer(msg.value);
     }
     
-    function endContract() public 
+    function endContract() public notExpired
     {
-        require(block.timestamp > expiry || claimed); 
+        require(!claimed);
         for(uint i = 0; i < contributors.length; i++)
         {
             //refund contributors
