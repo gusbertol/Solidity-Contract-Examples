@@ -1,54 +1,66 @@
-contract escrow{
-
-  mapping (address => uint) balances;
-
-  address public seller;
-  address public buyer;
-  address escrow = msg.sender;
-  bool sellerApprove;
-  bool buyerApprove;
-
-  function setup(address seller, address buyer){
-    if(msg.sender == escrow){
-        seller = seller;
-        buyer = buyer;
+pragma solidity ^0.4.11;
+contract Escrow {
+    uint balance;
+    address public buyer;
+    address public seller;
+    address private escrow;
+    uint private start;
+    bool buyerOk;
+    bool sellerOk;
+function Escrow(address buyer_address, address seller_address) public {
+        // this is the constructor function that runs ONCE upon initialization
+        buyer = buyer_address;
+        seller = seller_address;
+        escrow = msg.sender;
+        start = now; //now is an alias for block.timestamp, not really "now"
     }
-  }
-
-  function approve(){
-    if(msg.sender == buyer) buyerApprove = true;
-    else if(msg.sender == seller) sellerApprove = true;
-    if(sellerApprove && buyerApprove) fee();
-  }
-
-  function abort(){
-      if(msg.sender == buyer) buyerApprove = false;
-      else if (msg.sender == seller) sellerApprove = false;
-      if(!sellerApprove && !buyerApprove) refund();
-  }
-
-  function payOut(){
-    if(seller.send(this.balance)) balances[buyer] = 0;
-  }
-
-  function deposit(){
-      if(msg.sender == buyer) balances[buyer] += msg.value;
-      else throw;
-  }
-
-  function killContract() internal {
-      selfdestruct(escrow);
-      //kills contract and returns funds to buyer
-  }
-
-  function refund(){
-    if(buyerApprove == false && sellerApprove == false) selfdestruct(buyer);
-    //send money back to recipient if both parties agree contract is void
-  }
-
-  function fee(){
-      escrow.send(this.balance / 100); //1% fee
-      payOut();
-  }
-
+    
+    function accept() public {
+        if (msg.sender == buyer){
+            buyerOk = true;
+        } else if (msg.sender == seller){
+            sellerOk = true;
+        }
+        if (buyerOk && sellerOk){
+            payBalance();
+        } else if (buyerOk && !sellerOk && now > start + 30 days) {
+            // Freeze 30 days before release to buyer. The customer has to remember to call this method after freeze period.
+            selfdestruct(buyer);
+        }
+    }
+    
+    function payBalance() private {
+        // we are sending ourselves (contract creator) a fee
+        escrow.transfer(this.balance / 100);
+        // send seller the balance
+        if (seller.send(this.balance)) {
+            balance = 0;
+        } else {
+            revert();
+        }
+    }
+    
+    function deposit() public payable {
+        if (msg.sender == buyer) {
+            balance += msg.value;
+        }
+    }
+    
+    function cancel() public {
+        if (msg.sender == buyer){
+            buyerOk = false;
+        } else if (msg.sender == seller){
+            sellerOk = false;
+        }
+        // if both buyer and seller would like to cancel, money is returned to buyer 
+        if (!buyerOk && !sellerOk){
+            selfdestruct(buyer);
+        }
+    }
+    
+    function kill() public {
+        if (msg.sender == escrow) {
+            selfdestruct(buyer);
+        }
+    }
 }
